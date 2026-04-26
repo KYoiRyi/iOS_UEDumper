@@ -42,11 +42,10 @@ jobs:
       - name: Build tweak
         working-directory: Tweak
         run: |
-          make clean package THEOS=$THEOS
+          make clean package THEOS=$THEOS ARCHS=arm64e
 
-      - name: Upload built package
+      - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
-          name: UEDumper-deb
-          path: Tweak/packages/**/*.deb
-          if-no-files-found: warn
+          name: UEDumper-arm64e-dylib
+          path: Tweak/.theos/obj/arm64e/UEDumper.dylib
