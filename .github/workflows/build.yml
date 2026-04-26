@@ -25,16 +25,13 @@ jobs:
 
       - name: Install Theos
         run: |
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          git clone https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
       - name: Install iOS SDK
         run: |
-          # Download and install iOS SDK for cross-compilation on Linux
-          SDK_URL="https://github.com/xybpennings/iOS-SDKs/raw/master/iPhoneOS17.2.sdk.tar.xz"
-          curl -L -o /tmp/sdk.tar.xz "$SDK_URL"
-          mkdir -p $THEOS/sdks/iPhoneOS17.2.sdk
-          tar -xf /tmp/sdk.tar.xz -C $THEOS/sdks/iPhoneOS17.2.sdk --strip-components=1
+          rm -rf $THEOS/sdks
+          git clone https://github.com/theos/sdks.git $THEOS/sdks
           ls $THEOS/sdks/
 
       - name: Build tweak
