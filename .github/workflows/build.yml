@@ -1,0 +1,48 @@
+name: Build iOS Tweak
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot perl curl git lzma xz-utils bzip2
+
+      - name: Install Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Install iOS SDK
+        run: |
+          mkdir -p $THEOS/sdks
+          git clone https://github.com/theos/sdks.git $THEOS/sdks
+          # The sdks repo has iPhoneOS* sdk directories at its root
+          ls $THEOS/sdks/
+
+      - name: Build tweak
+        working-directory: Tweak
+        run: |
+          make clean package THEOS=$THEOS
+
+      - name: Upload built package
+        uses: actions/upload-artifact@v4
+        with:
+          name: UEDumper-deb
+          path: Tweak/packages/**/*.deb
+          if-no-files-found: warn
