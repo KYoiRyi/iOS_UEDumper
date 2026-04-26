@@ -21,12 +21,17 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y fakeroot perl curl git lzma xz-utils bzip2 dpkg-dev
+          sudo apt-get install -y fakeroot perl curl git lzma xz-utils bzip2 dpkg-dev rsync libxml2-utils
 
       - name: Install Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Install iOS toolchain
+        run: |
+          curl -sL https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz | tar -xJvf - -C $THEOS/toolchain/
+          ls $THEOS/toolchain/linux/iphone/bin/
 
       - name: Install iOS SDK
         run: |
