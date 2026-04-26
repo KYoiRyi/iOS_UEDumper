@@ -43,7 +43,7 @@
 #include "UE/UEGameProfiles/RLSideswipe.hpp"
 #include "UE/UEGameProfiles/PUBG.hpp"
 
-#define DUMP_DELAY_SEC 30
+#define DUMP_DELAY_SEC 3
 #define DUMP_FOLDER @"UEDump"
 
 static std::vector<IGameProfile *> UE_Games = {
@@ -94,13 +94,21 @@ void dump_thread()
     // wait for the application to finish initializing
     sleep(5);
 
+    @autoreleasepool {
+    @try {
+    NSLog(@"[UEDumper] dump_thread started, appID: %@", [[[NSBundle mainBundle] infoDictionary] objectForKey:(id)kCFBundleIdentifierKey]);
+
     Alert::showInfo([NSString stringWithFormat:@"Dumping after %d seconds.", DUMP_DELAY_SEC], nil, DUMP_DELAY_SEC / 2.f);
 
     sleep(DUMP_DELAY_SEC);
 
+    NSLog(@"[UEDumper] delay done, starting dump...");
+
     KittyAlertView *waitingAlert = Alert::showWaiting(@"Initializing Dumper...\n", nil);
 
     UEDumper uEDumper{};
+
+    NSLog(@"[UEDumper] UEDumper created");
 
     uEDumper.setDumpExeInfoNotify([&waitingAlert](bool bFinished)
     {
@@ -173,6 +181,7 @@ void dump_thread()
     auto dmpStart = std::chrono::steady_clock::now();
 
     NSString *appID = [[[NSBundle mainBundle] infoDictionary] objectForKey:(id)kCFBundleIdentifierKey];
+    NSLog(@"[UEDumper] matching game for appID: %@", appID);
 
     for (auto &it : UE_Games)
     {
@@ -180,9 +189,17 @@ void dump_thread()
         {
             if (pkg.compare(appID.UTF8String) == 0)
             {
+                NSLog(@"[UEDumper] found matching profile: %s", it->GetAppName().c_str());
+                NSLog(@"[UEDumper] calling Init...");
                 if (uEDumper.Init(it))
                 {
+                    NSLog(@"[UEDumper] Init success, calling Dump...");
                     dumpSuccess = uEDumper.Dump(&dumpbuffersMap);
+                    NSLog(@"[UEDumper] Dump finished, success=%d", dumpSuccess);
+                }
+                else
+                {
+                    NSLog(@"[UEDumper] Init failed: %s", uEDumper.GetLastError().c_str());
                 }
                 goto done;
             }
@@ -194,6 +211,7 @@ done:
     if (!dumpSuccess && uEDumper.GetLastError().empty())
     {
         Alert::dismiss(waitingAlert);
+        NSLog(@"[UEDumper] No matching game profile found for appID: %@", appID);
         Alert::showError(@"Not Supported, Check AppID", nil);
         return;
     }
@@ -201,9 +219,12 @@ done:
     if (dumpbuffersMap.empty())
     {
         Alert::dismiss(waitingAlert);
+        NSLog(@"[UEDumper] Buffers empty, error: %s", uEDumper.GetLastError().c_str());
         Alert::showError(@"Dump Failed", [NSString stringWithFormat:@"Error <Buffers empty>.\nStatus <%s>", uEDumper.GetLastError().c_str()], nil);
         return;
     }
+
+    NSLog(@"[UEDumper] Saving files...");
 
     execOnUIThread(^() {
       [waitingAlert setTitle:@"Saving Files..." needsLayout:YES];
@@ -215,6 +236,9 @@ done:
 
     NSString *dumpPath = [NSString stringWithFormat:@"%@/%s_%@", docDir, appName.c_str(), DUMP_FOLDER];
     NSString *zipdumpPath = [NSString stringWithFormat:@"%@.zip", dumpPath];
+
+    NSLog(@"[UEDumper] dumpPath: %@", dumpPath);
+    NSLog(@"[UEDumper] zipdumpPath: %@", zipdumpPath);
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
@@ -232,7 +256,7 @@ done:
     if (![fileManager createDirectoryAtPath:dumpPath withIntermediateDirectories:YES attributes:nil error:&error])
     {
         Alert::dismiss(waitingAlert);
-        NSLog(@"Failed to create folders\nError: %@", error);
+        NSLog(@"[UEDumper] Failed to create folders: %@", error);
         Alert::showError(@"Failed to create folders", [NSString stringWithFormat:@"Error: %@", error]);
         return;
     }
@@ -243,6 +267,7 @@ done:
         {
             NSString *path = [NSString stringWithFormat:@"%@/%s", dumpPath, it.first.c_str()];
             it.second.writeBufferToFile(path.UTF8String);
+            NSLog(@"[UEDumper] wrote file: %@", path);
         }
     }
 
@@ -253,6 +278,7 @@ done:
     else
     {
         Alert::dismiss(waitingAlert);
+        NSLog(@"[UEDumper] Failed to zip dump folder");
         Alert::showError(@"Failed to zip dump folder", [NSString stringWithFormat:@"Folder: %@", dumpPath]);
         return;
     }
@@ -261,6 +287,8 @@ done:
     std::chrono::duration<float, std::milli> dmpDurationMS = (dmpEnd - dmpStart);
 
     Alert::dismiss(waitingAlert);
+
+    NSLog(@"[UEDumper] Dump completed in %.2fms, success=%d", dmpDurationMS.count(), dumpSuccess);
 
     ui_action_block_t shareAction = ^() {
       Alert::showNoOrYes(@"Share Dump", @"Do you want to share/transfer dump ZIP file?", nil, ^() {
@@ -286,4 +314,11 @@ done:
     {
         Alert::showError(@"Dump Failed", [NSString stringWithFormat:@"Error <%s>.\nDuration: %.2fms\nDump Path:\n%@", uEDumper.GetLastError().c_str(), dmpDurationMS.count(), zipdumpPath], shareAction);
     }
+
+    } // @try
+    @catch (NSException *exception) {
+        NSLog(@"[UEDumper] CAUGHT EXCEPTION: %@\nReason: %@\nCall Stack: %@", exception.name, exception.reason, exception.callStackSymbols);
+        Alert::showError(@"Crash Caught", [NSString stringWithFormat:@"Exception: %@\nReason: %@", exception.name, exception.reason]);
+    }
+    } // @autoreleasepool
 }
